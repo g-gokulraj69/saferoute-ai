@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SafeRoute AI — Smart Navigation & SOS System</title>
+
+  <!-- Leaflet -->
+  <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="css/style.css"/>
+
+  <style>
+    /* ── Setup Banner ── */
+    #setup-banner {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10000;
+      background: linear-gradient(135deg, #ff8c00, #ff3c5f);
+      color: #fff;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    #setup-banner.hidden { display: none !important; }
+    #setup-banner strong { font-weight: 700; letter-spacing: 1px; }
+    #setup-banner button {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.5);
+      color: #fff;
+      padding: 5px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    #setup-banner button:hover { background: rgba(255,255,255,0.35); }
+    #setup-banner .banner-close {
+      background: transparent; border: none; font-size: 16px; cursor: pointer; opacity:0.7; padding:0 4px;
+    }
+
+    /* Push app down when banner is visible */
+    body.has-banner #app { margin-top: 40px; height: calc(100vh - 40px); }
+    body.has-banner #app { grid-template-rows: 54px 1fr; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     SETUP BANNER (shown when API keys are missing)
+══════════════════════════════════════════════════════════ -->
+<div id="setup-banner" class="hidden">
+  <span>⚙ <strong>SETUP REQUIRED:</strong> Add your API keys to enable routing, AI chat, and geocoding.</span>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button onclick="openConfig();hideBanner()">⚙ Open Config</button>
+    <button class="banner-close" onclick="hideBanner()" title="Dismiss">✕</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     CONFIG MODAL
+══════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop hidden" id="configModal">
+  <div class="modal-box">
+    <div class="modal-title">⚙ API CONFIGURATION</div>
+    <div class="modal-sub">
+      Add your API keys below. Keys are saved in your browser (localStorage) and never sent anywhere except the respective API servers.
+    </div>
+
+    <div class="config-field">
+      <label>🗺 OpenRouteService API Key</label>
+      <input type="password" id="cfg-ors" placeholder="eyJ..."/>
+      <small>
+        <a href="https://account.heigit.org" target="_blank" style="color:var(--accent)">account.heigit.org</a>
+        — Map routing &amp; directions (required for GET ROUTE)
+      </small>
+    </div>
+    <div class="config-field">
+      <label>📍 OpenCage API Key</label>
+      <input type="password" id="cfg-opencage" placeholder="..."/>
+      <small>
+        <a href="https://opencagedata.com" target="_blank" style="color:var(--accent)">opencagedata.com</a>
+        — GPS ↔ Address conversion (required for address search)
+      </small>
+    </div>
+    <div class="config-field">
+      <label>🤖 Gemini API Key</label>
+      <input type="password" id="cfg-gemini" placeholder="AIza..."/>
+      <small>
+        <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent)">aistudio.google.com</a>
+        — AI assistant (required for chat)
+      </small>
+    </div>
+    <div class="config-field">
+      <label>🚗 Roboflow API Key</label>
+      <input type="password" id="cfg-roboflow" placeholder="..."/>
+      <small>
+        <a href="https://app.roboflow.com" target="_blank" style="color:var(--accent)">app.roboflow.com</a>
+        — Vehicle detection (required for camera feature)
+      </small>
+    </div>
+    <div class="config-field">
+      <label>🚗 Roboflow Model ID</label>
+      <input type="text" id="cfg-model" placeholder="vehicle-detection-at-road/1"/>
+      <small>Your model name/version from Roboflow</small>
+    </div>
+    <div class="config-field">
+      <label>📱 Fast2SMS API Key <span style="color:var(--warning)">(India SMS)</span></label>
+      <input type="password" id="cfg-fast2sms" placeholder="..."/>
+      <small>
+        <a href="https://fast2sms.com" target="_blank" style="color:var(--accent)">fast2sms.com</a>
+        — SOS SMS alerts. Note: browsers block direct SMS requests (CORS); WhatsApp fallback is used automatically.
+      </small>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-modal-save"   onclick="saveConfig()">💾 SAVE</button>
+      <button class="btn-modal-cancel" onclick="closeConfig()">✕ CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TOAST
+══════════════════════════════════════════════════════════ -->
+<div id="toast">
+  <span id="toast-icon">ℹ️</span>
+  <span id="toast-msg">Ready</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN APP
+══════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── HEADER ────────────────────────────────────────── -->
+  <header id="header">
+    <div class="logo-wrap">
+      <span class="logo-icon">🛡</span>
+      <span class="logo-text">SAFE<span>ROUTE</span> AI</span>
+    </div>
+    <span class="header-subtitle">Smart Navigation &amp; Accident Detection System</span>
+
+    <div class="header-right">
+      <div class="status-chip">
+        <div class="dot green"></div>
+        <span id="gps-status">INITIALIZING</span>
+      </div>
+      <div class="status-chip">
+        <div class="dot blue"></div>
+        <span class="time-display" id="time-display">--:--:--</span>
+      </div>
+      <button class="btn-icon" onclick="openConfig()">⚙ CONFIG</button>
+    </div>
+  </header>
+
+  <!-- ── LEFT PANEL: Navigation ────────────────────────── -->
+  <aside id="left-panel" class="panel">
+
+    <!-- Route Planner -->
+    <div class="panel-section">
+      <div class="section-title">🧭 Route Planner</div>
+
+      <button class="btn btn-ghost" style="margin-bottom:10px;" onclick="locateMe()">
+        📍 USE MY CURRENT LOCATION
+      </button>
+
+      <div class="field">
+        <label>From</label>
+        <div class="input-wrap">
+          <span class="icon">🟢</span>
+          <input type="text" id="origin" placeholder="Current location or address"/>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>To</label>
+        <div class="input-wrap">
+          <span class="icon">🔴</span>
+          <input type="text" id="destination" placeholder="Enter destination"/>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="getRoute()">▶ GET ROUTE</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="panel-section">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Distance</div>
+          <div class="stat-value" id="dist-val">--</div>
+          <div class="stat-unit">km</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Est. Time</div>
+          <div class="stat-value" id="eta-val">--</div>
+          <div class="stat-unit">minutes</div>
+        </div>
+      </div>
+      <div class="addr-card" style="margin-top:8px;">
+        <div class="addr-label">📍 Current Location</div>
+        <div class="addr-value" id="current-addr">Detecting...</div>
+      </div>
+    </div>
+
+    <!-- Nearby Places -->
+    <div class="panel-section" style="padding-bottom:8px;">
+      <div class="section-title">📍 Nearby Places</div>
+    </div>
+    <div id="nearby-scroll">
+      <div id="nearby-list" style="font-size:12px;color:var(--text-dim);padding:10px 0;">
+        Get location to see nearby hospitals, police &amp; fuel stations
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAP ───────────────────────────────────────────── -->
+  <main id="map-container">
+    <div id="map"></div>
+    <div class="map-controls">
+      <button onclick="clearRoute()">🗑 Clear Route</button>
+      <button onclick="centerMap()">📍 My Location</button>
+      <button onclick="loadNearbyPlaces(userLat, userLng)">🔄 Refresh Nearby</button>
+    </div>
+  </main>
+
+  <!-- ── RIGHT PANEL: SOS + Detection + Chat ───────────── -->
+  <aside id="right-panel" class="panel">
+
+    <!-- SOS -->
+    <div class="panel-section">
+      <div class="section-title">🚨 Emergency SOS</div>
+      <button class="sos-btn" id="sosBtn" onclick="triggerSOS()">🚨 SOS</button>
+      <div class="sos-sub">Sends GPS location to emergency contacts via SMS / WhatsApp</div>
+    </div>
+
+    <!-- Emergency Contacts -->
+    <div class="panel-section">
+      <div class="section-title">📞 Emergency Contacts</div>
+      <div class="field">
+        <label>Your Name</label>
+        <input type="text" id="victim-name" placeholder="Enter your full name"/>
+      </div>
+      <div class="field">
+        <label>Primary Contact (with country code)</label>
+        <input type="tel" id="emergency-contact" placeholder="91XXXXXXXXXX"/>
+      </div>
+      <div class="field">
+        <label>Secondary Contact (optional)</label>
+        <input type="tel" id="emergency-contact2" placeholder="91XXXXXXXXXX"/>
+      </div>
+    </div>
+
+    <!-- Vehicle Detection + Drowsiness Monitor -->
+    <div class="panel-section">
+      <div class="section-title">📷 Driver Monitor &amp; Detection</div>
+      <div class="cam-box">
+        <video id="videoFeed" autoplay muted playsinline></video>
+        <canvas id="camCanvas"></canvas>
+        <div class="cam-placeholder" id="camPlaceholder">
+          <span class="cam-placeholder-icon">📷</span>
+          <span>Camera Inactive</span>
+        </div>
+      </div>
+      <div class="cam-btns">
+        <button class="btn btn-primary" onclick="startCamera()">▶ START</button>
+        <button class="btn btn-ghost"   onclick="stopCamera()">■ STOP</button>
+      </div>
+
+      <!-- Vehicle detection status -->
+      <div class="detect-bar">
+        <span style="font-size:11px;">Vehicles</span>
+        <span class="detect-val idle" id="detection-status">IDLE</span>
+      </div>
+
+      <!-- Drowsiness monitor -->
+      <div class="detect-bar" style="margin-top:5px;">
+        <span style="font-size:11px;">Eyes</span>
+        <span class="detect-val idle" id="drowsy-status">IDLE</span>
+      </div>
+
+      <!-- Eye-close timer bar -->
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:3px;">
+          <span>😴 DROWSY TIMER (auto SOS at 10s)</span>
+          <span id="drowsy-timer">0s / 10s</span>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:4px;height:6px;overflow:hidden;">
+          <div id="drowsy-bar-fill" style="height:100%;width:0%;background:#00ff88;transition:width 0.1s;border-radius:4px;"></div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:5px;text-align:center;">
+        ⚠ Eyes closed ≥ 10s → alarm + auto SMS/WhatsApp sent
+      </div>
+    </div>
+
+    <!-- AI Chat -->
+    <div class="panel-section" style="padding-bottom:6px;">
+      <div class="section-title">🤖 AI Assistant</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;">
+        <button class="btn-icon" style="font-size:10px;padding:3px 8px;" onclick="askQuick('What should I do if I see a road accident?')">Accident help</button>
+        <button class="btn-icon" style="font-size:10px;padding:3px 8px;" onclick="askQuick('What are important traffic rules in India?')">Traffic rules</button>
+        <button class="btn-icon" style="font-size:10px;padding:3px 8px;" onclick="askQuick('How to navigate safely in heavy rain?')">Rain driving</button>
+        <button class="btn-icon" style="font-size:10px;padding:3px 8px;" onclick="loadNearbyPlaces(userLat,userLng)">🔄 Nearby</button>
+      </div>
+    </div>
+
+    <div class="chat-wrap">
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-bar">
+        <input type="text" id="chat-input" placeholder="Ask anything about navigation or safety..."/>
+        <button class="chat-send" onclick="sendChat()">➤</button>
+      </div>
+    </div>
+
+  </aside>
+</div><!-- /#app -->
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS (load order matters)
+══════════════════════════════════════════════════════════ -->
+<script src="js/config.js"></script>
+<script src="js/geocode.js"></script>
+<script src="js/map.js"></script>
+<script src="js/detection.js"></script>
+<script src="js/sos.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+  // Show setup banner if keys are missing after load
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const needsSetup = !CONFIG.ORS_API_KEY || !CONFIG.OPENCAGE_API_KEY || !CONFIG.GEMINI_API_KEY;
+      if (needsSetup) {
+        document.getElementById('setup-banner').classList.remove('hidden');
+        document.body.classList.add('has-banner');
+      }
+    }, 500);
+  });
+
+  function hideBanner() {
+    document.getElementById('setup-banner').classList.add('hidden');
+    document.body.classList.remove('has-banner');
+  }
+</script>
+
+</body>
+</html>

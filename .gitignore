@@ -1,0 +1,31 @@
+# ============================================================
+#  SafeRoute AI — .gitignore
+#  NEVER commit files containing real API keys
+# ============================================================
+
+# Local config with real keys (if you create one)
+js/config.local.js
+config.local.js
+.env
+.env.local
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Node (if you ever add a backend)
+node_modules/
+package-lock.json
